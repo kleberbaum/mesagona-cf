@@ -1,0 +1,29 @@
+{
+  "name": "llama3-cf-pylon",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "pylon build && wrangler deploy",
+    "dev": "pylon dev -c 'wrangler dev' --client --client-port 8787 --client-path ../jaen/src/clients/ai-cloudflare/index.ts",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@cloudflare/ai": "^1.2.2",
+    "@getcronit/pylon": "^2.0.0-beta.7",
+    "base64-js": "^1.5.1",
+    "node-gyp": "^10.2.0",
+    "ssh2": "^1.15.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.4.5",
+    "@cloudflare/workers-types": "^4.20240903.0",
+    "@getcronit/pylon-dev": "^1.0.0-beta.8",
+    "typescript": "^5.5.2",
+    "wrangler": "^3.60.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/getcronit/pylon.git"
+  },
+  "homepage": "https://pylon.cronit.io"
+}

@@ -1,0 +1,111 @@
+// Import necessary modules
+import { app } from '@getcronit/pylon';
+import { upgradeWebSocket } from 'hono/cloudflare-workers';
+
+// Constants
+const VALID_HOSTNAME_REGEX = /^[a-zA-Z0-9.-]+$/; // Basic hostname validation
+
+// GraphQL settings (Not changed, so kept as is)
+export const graphql = {
+  Query: {
+    hello: () => 'Hello, world!'
+  },
+  Mutation: {}
+};
+
+// Handle regular HTTP requests
+app.get('*', (c) => {
+  const upgradeHeader = c.req.header('Upgrade');
+  if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
+    return c.text("Only WebSocket connections are welcome here");
+  }
+  // Proceed to handle WebSocket connection if Upgrade header is present
+  return;
+});
+
+app.get('/:sshServer', async (c) => {
+  // Ensure it's a WebSocket request
+  const upgradeHeader = c.req.header('Upgrade');
+  if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
+    return c.text("Only WebSocket connections are welcome here");
+  }
+
+  upgradeWebSocket(c, {
+    async onOpen(ws) {
+      const { sshServer } = c.req.param();
+      const [hostname, portStr] = sshServer.split(':');
+
+      // Basic validation checks
+      if (!hostname || !portStr) {
+        console.error('Invalid SSH server address format');
+        ws.close();
+        return;
+      }
+
+      if (!VALID_HOSTNAME_REGEX.test(hostname)) {
+        console.error(`Invalid hostname: ${hostname}`);
+        ws.close();
+        return;
+      }
+
+      const port = parseInt(portStr, 10);
+      if (isNaN(port) || port <= 0 || port > 65535) {
+        console.error(`Invalid port: ${port}`);
+        ws.close();
+        return;
+      }
+
+      console.log(`Connecting to SSH server ${hostname}:${port}`);
+
+      let sshSocket;
+
+      try {
+        // Replace Bun.connect with Cloudflare Workers equivalent
+        const socket = await (c.env as any).TCP.connect({
+          hostname,
+          port,
+        });
+
+        sshSocket = socket;
+
+        socket.addEventListener('message', (event) => {
+          ws.send(event.data);
+        });
+
+        socket.addEventListener('error', (error) => {
+          console.error('SSH socket error:', error.message);
+          ws.close();
+        });
+
+        socket.addEventListener('close', () => {
+          console.log('SSH connection closed');
+          ws.close();
+        });
+
+        console.log(`Connected to SSH server ${hostname}:${port}`);
+      } catch (error) {
+        console.error(`Failed to connect to SSH server ${hostname}:${port}:`, error);
+        ws.close();
+      }
+
+      ws.addEventListener('message', (event) => {
+        if (sshSocket && event.data instanceof ArrayBuffer) {
+          sshSocket.write(new Uint8Array(event.data));
+        } else {
+          console.error('Received non-binary data or no SSH connection');
+        }
+      });
+
+      ws.addEventListener('close', () => {
+        console.log("WebSocket connection closed");
+        if (sshSocket) {
+          sshSocket.close();
+          sshSocket = null;
+        }
+      });
+    },
+  });
+});
+
+// Export the handler for fetch events
+export default { fetch: app.fetch };
